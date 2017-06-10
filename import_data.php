@@ -6,7 +6,8 @@ require __DIR__ . '/DefaultAttribute.php';
 require __DIR__ . '/Product.php';
 require __DIR__ . '/Variant.php';
 
-$data_dir = 'DATA/';
+$DATA_DIR = 'DATA/';
+$SOURCE_SITE = 'https://my.luxottica.com/myLuxotticaImages/';
 
 use Automattic\WooCommerce\Client;
 
@@ -45,8 +46,9 @@ function step2() {
 		"values (?,?,?,?,?,?,?,?)";
 
 	//Get distinct list of all models
-	$models = $db->query("SELECT distinct model FROM frames where model='0VO5037'");
-
+	$models = $db->query("SELECT distinct model FROM frames");
+	//$models = $db->query("SELECT distinct model FROM frames where model='0VO5037'");
+	
 	$frames_for_model_statement = $db->prepare("select * from frames where model=?");
 	$insert_product_statement = $db->prepare($insert_product_sql);
 	$insert_variation_statement = $db->prepare($insert_variation_sql);
@@ -120,7 +122,7 @@ function step2() {
 				}
 				
 				$photo_url = str_replace(' ', '_', $p['model']) . '__' . $p['color_code'] . '_890x445.jpg';
-				$photo_url = 'https://my.luxottica.com/myLuxotticaImages/' . $p['brand_code'] . '/' . str_replace('/', '_', $photo_url);
+				$photo_url = $SOURCE_SITE . $p['brand_code'] . '/' . str_replace('/', '_', $photo_url);
 
 				try {
 					$insert_variation_statement->execute(
@@ -194,13 +196,13 @@ function step2() {
 function step1() {
 	global $db;
 
-	$data_files = array_diff(scandir($data_dir), array('..', '.'));
+	$data_files = array_diff(scandir($DATA_DIR), array('..', '.'));
 
 	$file_name = $data_files[2];
 
 	$count = 0;
 
-	if ($file = fopen($data_dir . $file_name, "r")) {
+	if ($file = fopen($DATA_DIR . $file_name, "r")) {
 		fgets($file);
 		fgets($file);
 	} else {
