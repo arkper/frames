@@ -31,13 +31,20 @@ $db = new PDO('sqlite:frames.db') or die ('Could not open the database frames.db
 // Set errormode to exceptions
 $db->setAttribute(PDO::ATTR_ERRMODE,
                             PDO::ERRMODE_EXCEPTION);
+if ($argv[1] == "1") {
+	step1();
+} elseif ($argv[1] == "2") {
+	step2();
+} elseif ($argv[1] == "12") {
+	step1();
+	step2();
+}
 
-step2();
 
 function step2() {
 	global $db;
 
-	$insert_product_sql = 
+	$insert_product_sql =
 		"insert into products(model, lens_color, lens_material, photochromic, polarized, standard, temple_length, bridge_size," .
 		"lens_witdth, lens_height, rx_able, front_color, shape, type, temple_material, front_material, gender, collection, new," .
 		"theme, brand_name, brand_code, tags) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -48,7 +55,7 @@ function step2() {
 	//Get distinct list of all models
 	$models = $db->query("SELECT distinct model FROM frames");
 	//$models = $db->query("SELECT distinct model FROM frames where model='0VO5037'");
-	
+
 	$frames_for_model_statement = $db->prepare("select * from frames where model=?");
 	$insert_product_statement = $db->prepare($insert_product_sql);
 	$insert_variation_statement = $db->prepare($insert_variation_sql);
@@ -66,24 +73,24 @@ function step2() {
 
 		try {
 			$model = $model_record[0];
-			
+
 			echo "Processing model $model\n";
-			
+
 			$model_statement->execute(array($model));
-				
+
 			$prod_id = $model_statement->fetch(PDO::FETCH_ASSOC)['id'];
-				
+
 			// echo "Product id is $prod_id\n";
-				
+
 			if ($prod_id != null ){
 				//echo "Product $prod_id has been updated - skipping\n";
 				continue;
 			}
-			
+
 			$frames_for_model_statement->execute(array($model));
-			
+
 			$frames_for_model = $frames_for_model_statement->fetchAll(PDO::FETCH_ASSOC);
-			
+
 			// initialize variables before the loop starts
 			$variations = array();
 			$first_variation = true;
@@ -91,16 +98,16 @@ function step2() {
 			$images = array();
 			$attributes = array();
 			$default_attributes = array();
-			
+
 			foreach ($frames_for_model as $p) {
 				$size = $p['size'];
 				$color = $p['color_name'];
 				$color_code = $p['color_code'];
 				//echo "Size: $size; Color: $color\n";
 				if ($first_variation) {
-					
+
 					$first_variation = false;
-					
+
 					try {
 						$insert_product_statement->execute(
 								array(
@@ -113,14 +120,14 @@ function step2() {
 						echo $e->getMessage() . "\n";
 						continue;
 					}
-			
+
 					$product = Product::fromArray($p, $categories, $tags);
-			
+
 					array_push($default_attributes, new DefaultAttribute('Color', "$color_code ($color)"));
 					array_push($default_attributes, new DefaultAttribute('Size', $size));
-			
+
 				}
-				
+
 				$photo_url = str_replace(' ', '_', $p['model']) . '__' . $p['color_code'] . '_890x445.jpg';
 				$photo_url = $SOURCE_SITE . $p['brand_code'] . '/' . str_replace('/', '_', $photo_url);
 
@@ -130,65 +137,65 @@ function step2() {
 							$p['sku'], $p['model'], $color, $p['color_code'], $size, $p['suggested_retail_price'], $p['wholesale_price'], $photo_url
 						)
 					);
-								
+
 				} catch (Exception $e) {
 					echo $e->getMessage() . "\n";
 					continue;
 				}
-			
+
 				$image = addImage ($images, $photo_url);
 				addAttribute($attributes, Attribute::withNameAndOption('Color', "$color_code ($color)"));
 				addAttribute($attributes, Attribute::withNameAndOption('Size', $size));
-			
+
 				$variation = new Variant($p['sku'], $p['suggested_retail_price'], $image,
 						array(
 								Attribute::withNameAndOption('Color', "$color_code ($color)"), Attribute::withNameAndOption('Size', $size)
 						)
 				);
-			
+
 				array_push($variations, $variation);
-			
+
 			}
-			
+
 			$product->images = $images;
 			$product->attributes = $attributes;
 			$product->default_attributes = $default_attributes;
 			$product->variants = $variations;
-			
+
 			// Make a call to WP and insert the product
 			$product_data = add_product($product);
-			
+
 			//Update the product object with information received from WP (id for product and images)
 			$product->update($product_data);
-			
+
 			//Update product record with id from WP
 			$product_update_statement->execute(array($product->id, $product->model));
-			
+
 			echo ("Added product " . $product_data['id'] . "\n");
-			
+
 			//echo "Product data:\n";
-			
+
 			//print_r($product_data);
-			
+
 			//Insert product variants in one bulk call to WP
 			$variants_data = add_variants($product);
-			
+
 			echo "Variants data:\n";
-			
+
 			print_r($variants_data);
-			
+
 			foreach($variants_data['create'] as $variant) {
 				$variant_update_statement->execute(array($variant['id'], $variant['sku']));
 			}
-			
-			
+
+
 			echo "Added product variants\n";
-			
+
 			break;
 		} catch (Exception $e) {
 			echo $e->getMessage() . "\n";
 			continue;
-				
+
 		}
 	}
 }
@@ -318,7 +325,7 @@ function addAttribute (&$attributes, $attribute) {
 
 function add_product($product) {
 	print_r ($product->description() . "\n");
-	
+
 	global $woocommerce;
 	return $woocommerce->post('products', $product->getProductData());
 }
